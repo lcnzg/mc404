@@ -25,6 +25,7 @@ CALL_ALARM_QUEUE: .skip 96
 CALL_ALARM_N: .word 0
 CALL_PROX_QUEUE: .skip 64
 CALL_PROX_N: .word 0
+
 SYSCALL_TABLE:
 .word read_sonar
 .word register_proximity_callback
@@ -34,23 +35,29 @@ SYSCALL_TABLE:
 .word set_time
 .word set_alarm
 
-.set GPT_BASE,	0x53FA0000
+@ Constantes para os enderecos do GPT
+.set GPT_BASE,  0x53FA0000
 .set GPT_CR,	0x0
 .set GPT_PR,	0x4
 .set GPT_SR,	0x8
 .set GPT_IR,	0xC
 .set GPT_OCR1,	0x10
 
+@ Constantes para os enderecos do TZIC
 .set TZIC_BASE,		0x0FFFC000
 .set TZIC_INTCTRL,	0x0
 .set TZIC_INTSEC1,	0x84
-.set TZIC_ENSET1,	0x104
-.set TZIC_PRIOMASK,	0xC
-.set TZIC_PRIORITY9,	0x424
+.set TZIC_ENSET1, 0x104
+.set TZIC_PRIOMASK, 0xC
+.set TZIC_PRIORITY9,  0x424
 
-.set GPIO_BASE,		0x53F84000
-.set GPIO_DR,		0x0
-.set GPIO_GDIR,		0x4
+@ Constantes para os enderecos do GPIO
+.set GPIO_BASE, 0x53F84000
+.set GPIO_DR, 0x0
+.set GPIO_GDIR, 0x4
+.set GPIO_PSR,  0x8
+
+.set TIME_SZ, 100
 
 .set USER_STACK_BEGIN, 0x80000000
 
@@ -78,17 +85,14 @@ RESET_HANDLER:
     ldr r0, =interrupt_vector
 
     mcr p15, 0, r0, c12, c0, 0
+
 SET_GPIO:
     @ configura GPIO
     ldr r1, =GPIO_BASE
 
-    mov r0, #0b111110
-    mov r2, #255
-    orr r0, r0, r2, lsl #18
-    mov r2, #63
-    orr r0, r0, r2, lsl #26
-
+    mov r0, #0b11111111111111000000000000111110 @ configuracao de entrada e saida
     str r0, [r1, #GPIO_GDIR]
+
 SET_GPT:
     @ configura GPT
     ldr r1, =GPT_BASE
@@ -99,11 +103,13 @@ SET_GPT:
     eor r0, r0, r0
     str r0, [r1, #GPT_PR]
 
-    mov r0, #100
+    @ Coloca TIME_SZ no GPT_OCR1
+    mov r0, #TIME_SZ
     str r0, [r1, #GPT_OCR1]
 
     mov r0, #1
     str r0, [r1, #GPT_IR]
+
 SET_TZIC:
     @ configura TZIC
     ldr	r1, =TZIC_BASE
@@ -114,13 +120,11 @@ SET_TZIC:
 
     @ Habilita interrupcao 39 (GPT)
     @ reg1 bit 7 (gpt)
-
     mov	r0, #(1 << 7)
     str	r0, [r1, #TZIC_ENSET1]
 
     @ Configurar interrupt39 priority como 1
     @ reg9, byte 3
-
     ldr r0, [r1, #TZIC_PRIORITY9]
     bic r0, r0, #0xFF000000 @ copia a parte menos significativa
     mov r2, #1
@@ -269,7 +273,7 @@ set_motors_speed:
     and r1, r1, #0b111111
     mov r1, r1, lsl 1
     orreq r3, r3, r0, lsl 18
-    orrne r3, r3, r1, lsl 25 
+    orrne r3, r3, r1, lsl 25
 
     str r3, [r2, =GPIO_DR]
 set_motors_speed_error2:
