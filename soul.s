@@ -185,17 +185,37 @@ SWI_HANDLER:
 NOT_HANDLED:
     b NOT_HANDLED
 
+@ Parametros:
+@ r0: identificador do sonar
+@ Retorno:
+@ r0: distancia / -1: parametro invalido
 read_sonar:
     cmp r0, #15
     bhi read_sonar_erro1
 
     @ TODO: ler sonar
+    ldr r1, =GPIO_BASE
+    ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
 
-    mov r0, #0
+    @ SONAR_MUX <- SONAR_ID
+
+    @ TRIGGER <- 0
+    @ Delay 15ms
+
+    @ TRIGGER <- 1
+    @ Delay 15ms
+
+    @ TRIGGER <- 0
+      @ FLAG 1?
+      @ N: Delay 10ms / volta
+      @ Y: r0 <- SONAR_DATA
+
+    mov r0, #0 @ distancia
     mov pc, lr
-read_sonar_erro1:
-    mov r0, #-1
-    mov pc, lr
+
+    read_sonar_erro1:
+      mov r0, #-1
+      mov pc, lr
 
 register_proximity_callback:
     ldr r3, =CALL_PROX_N
