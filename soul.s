@@ -193,28 +193,55 @@ read_sonar:
     cmp r0, #15
     bhi read_sonar_erro1
 
-    @ TODO: ler sonar
+    @ Ler sonar
     ldr r1, =GPIO_BASE
     ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
 
     @ SONAR_MUX <- SONAR_ID
-
     @ TRIGGER <- 0
-    @ Delay 15ms
+    bic r2, r2, #0b111110 @ SONAR_MUX = 0 e TRIGGER = 0
+    orr r2, r2, r0, lsl #2 @ GPIO_DR <- SONAR_MUX <- SONAR_ID
+    str r2, [r1, #GPIO_DR] @ r2 -> GPIO_DR (Data register)
+
+    @ TODO: Delay 15ms
 
     @ TRIGGER <- 1
-    @ Delay 15ms
+    ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
+    orr r2, r2, #0b10 @ TRIGGER = 1
+    str r2, [r1, #GPIO_DR] @ r2 -> GPIO_DR (Data register)
+
+    @ TODO: Delay 15ms
 
     @ TRIGGER <- 0
-      @ FLAG 1?
-      @ N: Delay 10ms / volta
-      @ Y: r0 <- SONAR_DATA
+    ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
+    bic r2, r2, #0b10 @ TRIGGER = 0
+    str r2, [r1, #GPIO_DR] @ r2 -> GPIO_DR (Data register)
 
-    mov r0, #0 @ distancia
-    mov pc, lr
+    @ FLAG 1?
+    read_sonar_loop:
+      ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
+      and r2, r2, #0b1 @ r2 <- FLAG
+
+      cmp r2, #1
+      beq read_sonar_loop1
+
+      @ N: Delay 10ms / volta
+
+      @ TODO: Delay 10ms
+
+      b read_sonar_loop
+
+    read_sonar_loop1:
+      @ Y: r0 <- SONAR_DATA
+      ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
+      mov r0, r2, lsr #6
+
+      and r0, r0, #0b111111111111 @ r0 <- distancia
+
+    mov pc, lr @ retorna com r0
 
     read_sonar_erro1:
-      mov r0, #-1
+      mov r0, #-1 @ retorna caso parametro invalido
       mov pc, lr
 
 register_proximity_callback:
