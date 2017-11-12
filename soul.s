@@ -15,16 +15,16 @@ b IRQ_HANDLER
 b NOT_HANDLED
 
 .data
-SYS_TIME: .skip 4
-USER_TEXT: .word 0x77802000
-IRQ_STACK: .skip 512
+SYS_TIME:             .skip 4
+USER_TEXT:            .word 0x77802000
+IRQ_STACK:            .skip 512
 IRQ_STACK_BEGIN:
-SUPERVISOR_STACK: .skip 512
+SUPERVISOR_STACK:     .skip 512
 SUPERVISOR_STACK_BEGIN:
-CALL_ALARM_QUEUE: .skip 96
-CALL_ALARM_N: .word 0
-CALL_PROX_QUEUE: .skip 64
-CALL_PROX_N: .word 0
+CALL_ALARM_QUEUE:     .skip 96
+CALL_ALARM_N:         .word 0
+CALL_PROX_QUEUE:      .skip 64
+CALL_PROX_N:          .word 0
 
 SYSCALL_TABLE:
 .word read_sonar
@@ -36,33 +36,33 @@ SYSCALL_TABLE:
 .word set_alarm
 
 @ Constantes para os enderecos do GPT
-.set GPT_BASE,  0x53FA0000
-.set GPT_CR,	0x0
-.set GPT_PR,	0x4
-.set GPT_SR,	0x8
-.set GPT_IR,	0xC
-.set GPT_OCR1,	0x10
+.set GPT_BASE,        0x53FA0000
+.set GPT_CR,          0x0
+.set GPT_PR,          0x4
+.set GPT_SR,          0x8
+.set GPT_IR,          0xC
+.set GPT_OCR1,        0x10
 
 @ Constantes para os enderecos do TZIC
-.set TZIC_BASE,		0x0FFFC000
-.set TZIC_INTCTRL,	0x0
-.set TZIC_INTSEC1,	0x84
-.set TZIC_ENSET1, 0x104
-.set TZIC_PRIOMASK, 0xC
+.set TZIC_BASE,       0x0FFFC000
+.set TZIC_INTCTRL,    0x0
+.set TZIC_INTSEC1,    0x84
+.set TZIC_ENSET1,     0x104
+.set TZIC_PRIOMASK,   0xC
 .set TZIC_PRIORITY9,  0x424
 
 @ Constantes para os enderecos do GPIO
-.set GPIO_BASE, 0x53F84000
-.set GPIO_DR, 0x0
-.set GPIO_GDIR, 0x4
-.set GPIO_PSR,  0x8
+.set GPIO_BASE,       0x53F84000
+.set GPIO_DR,         0x0
+.set GPIO_GDIR,       0x4
+.set GPIO_PSR,        0x8
 
-.set TIME_SZ, 100
+.set TIME_SZ,         100
 
-.set USER_STACK_BEGIN, 0x80000000
+.set USER_STACK_BEGIN,  0x80000000
 
-.set MAX_CALLBACKS, 8
-.set MAX_ALARMS, 8
+.set MAX_CALLBACKS,   8
+.set MAX_ALARMS,      8
 
 .align 4
 .text
@@ -185,13 +185,14 @@ SWI_HANDLER:
 NOT_HANDLED:
     b NOT_HANDLED
 
+@ read_sonar (codigo: 16)
 @ Parametros:
-@ r0: identificador do sonar
+@ r0: identificador do sonar (0 a 15)
 @ Retorno:
-@ r0: distancia / -1: parametro invalido
+@ r0: distancia / -1: sonar invalido
 read_sonar:
     cmp r0, #15
-    bhi read_sonar_erro1
+    bhi read_sonar_erro1 @ sonar invalido
 
     @ Ler sonar
     ldr r1, =GPIO_BASE
@@ -238,20 +239,30 @@ read_sonar:
 
       and r0, r0, #0b111111111111 @ r0 <- distancia
 
-    mov pc, lr @ retorna com r0
+    mov pc, lr @ retorna r0 (distancia)
 
+    @ sonar invalido
     read_sonar_erro1:
-      mov r0, #-1 @ retorna caso parametro invalido
+      mov r0, #-1
       mov pc, lr
 
+@ register_proximity_callback (codigo: 17)
+@ Parametros:
+@ r0: identificador do sonar (0 a 15)
+@ r1: limiar de distancia
+@ r2: ponteiro funcao caso alarme
+@ Retorno:
+@ r0: -1 se callbacks maior que MAX_CALLBACKS
+@     -2 se sonar invalido
+@     0 se não
 register_proximity_callback:
     ldr r3, =CALL_PROX_N
     ldr r3, [r3]
     cmp r3, #MAX_CALLBACKS
-    bhi register_proximity_callback_error1
+    bhi register_proximity_callback_error1 @ > que MAX_CALLBACKS
 
     cmp r0, #15
-    bhi register_proximity_callback_error2
+    bhi register_proximity_callback_error2 @ sonar invalido
 
     ldr r3, =CALL_PROX_QUEUE
     add r3, r3, r2, lsl #3
@@ -262,91 +273,146 @@ register_proximity_callback:
     mov r0, #0
     str r0, [r3, #12]
 
+    @ ok, retorna
     mov r0, #0
     mov pc, lr
-register_proximity_callback_error1:
-    mov r0, #-1
-    mov pc, lr
-register_proximity_callback_error2:
-    mov r0, #-2
-    mov pc, lr
 
+    @ > que MAX_CALLBACKS
+    register_proximity_callback_error1:
+        mov r0, #-1
+        mov pc, lr
+
+    @ sonar invalido
+    register_proximity_callback_error2:
+        mov r0, #-2
+        mov pc, lr
+
+@ set_motor_speed (codigo: 18)
+@ Parametros:
+@ r0: identificador do motor (0 ou 1)
+@ r1: velocidade
+@ Retorno:
+@ r0: -1 se motor invalido
+@     -2 se velocidade invalida
+@     0 caso ok
 set_motor_speed:
     cmp r0, #0
     cmpne r0, #1
-    bne set_motor_speed_error1 @ identificador inválido
+    bne set_motor_speed_error1 @ motor inválido
     cmp r1, #63
     bhi set_motor_speed_error2 @ velocidade inválida
 
     ldr r2, =GPIO_BASE
-    ldr r3, [r2, =GPIO_DR]
+    ldr r3, [r2, #GPIO_DR]
+
     @ máscara para escrever a velocidade do motor
-    bic r3, r3, #00FC0000
-    bic r3, r3, #FF000000
+    bic r3, r3, #0x00FC0000
+    bic r3, r3, #0xFF000000
 
-    @ codifica os bits a serem escrevidos
+    @ codifica os bits a serem escritos
     and r1, r1, #0b111111
-    mov r1, r1, lsl 1
+    mov r1, r1, lsl #1
     cmp r0, #0
-    orreq r3, r3, r1, lsl 18
-    orrne r3, r3, r1, lsl 25
+    orreq r3, r3, r1, lsl #18
+    orrne r3, r3, r1, lsl #25
 
-    str r3, [r2, =GPIO_DR]
+    str r3, [r2, #GPIO_DR]
 
+    @ ok, retorna
     mov r0, #0
     mov pc, lr
-set_motor_speed_error1:
-    mov r0, #-1
-    mov pc, lr
-set_motor_speed_error2:
-    mov r0, #-2
-    mov pc, lr
 
+    @ motor inválido
+    set_motor_speed_error1:
+      mov r0, #-1
+      mov pc, lr
+
+    @ velocidade inválida
+    set_motor_speed_error2:
+      mov r0, #-2
+      mov pc, lr
+
+@ set_motors_speed (codigo: 19)
+@ Parametros:
+@ r0: velocidade para motor 0
+@ r1: velocidade para motor 1
+@ Retorno:
+@ r0: -1 se velocidade do motor 0 invalida
+@     -2 se velocidade do motor 1 invalida
+@     0 caso ok
 set_motors_speed:
     cmp r0, #63
-    bhi set_motors_speed_error2 @ velocidade inválida
+    bhi set_motors_speed_error2 @ velocidade motor 0 inválida
     cmp r1, #63
-    bhi set_motors_speed_error3 @ velocidade inválida
+    bhi set_motors_speed_error3 @ velocidade motor 1 inválida
 
     ldr r2, =GPIO_BASE
-    ldr r3, [r2, =GPIO_DR]
+    ldr r3, [r2, #GPIO_DR]
+
     @ máscara para escrever a velocidade do motor
-    bic r3, r3, #00FC0000
-    bic r3, r3, #FF000000
+    bic r3, r3, #0x00FC0000
+    bic r3, r3, #0xFF000000
 
-    @ codifica os bits a serem escrevidos
+    @ codifica os bits a serem escritos
     and r0, r0, #0b111111
-    mov r0, r0, lsl 1
+    mov r0, r0, lsl #1
     and r1, r1, #0b111111
-    mov r1, r1, lsl 1
-    orreq r3, r3, r0, lsl 18
-    orrne r3, r3, r1, lsl 25
+    mov r1, r1, lsl #1
+    orreq r3, r3, r0, lsl #18
+    orrne r3, r3, r1, lsl #25
+    str r3, [r2, #GPIO_DR]
 
-    str r3, [r2, =GPIO_DR]
-set_motors_speed_error2:
-    mov r0, #-2
+    @ ok, retorna
+    mov r0, #0
     mov pc, lr
 
+    @ velocidade motor 0 inválida
+    set_motors_speed_error2:
+        mov r0, #-1
+        mov pc, lr
+
+    @ velocidade motor 1 inválida
+    set_motors_speed_error3:
+        mov r0, #-2
+        mov pc, lr
+
+@ get_time (codigo: 20)
+@ Parametros:
+@ -
+@ Retorno:
+@ r0: tempo do sistema
 get_time:
     ldr r0, =SYS_TIME
     ldr r0, [r0]
     mov pc, lr
 
+@ set_time (codigo: 21)
+@ Parametros:
+@ r0: tempo do sistema
+@ Retorno:
+@ -
 set_time:
     ldr r1, =SYS_TIME
     str r0, [r1]
     mov pc, lr
 
+@ set_alarm (codigo: 22)
+@ Parametros:
+@ r0: ponteiro funcao caso alarme
+@ r1: tempo do sistema
+@ r0: -1 se qtd alarmes ativos maior que MAX_ALARMS
+@     -2 se tempo menor que tempo atual sistema
+@     0 caso ok
 set_alarm:
     ldr r2, =CALL_ALARM_N
     ldr r2, [r2]
     cmp r2, #MAX_ALARMS
-    bhi set_alarm_error1
+    bhi set_alarm_error1 @ alames ativos > que MAX_ALARMS
 
     ldr r3, =SYS_TIME
     ldr r3, [r3]
     cmp r3, r1
-    blo set_alarm_error2
+    blo set_alarm_error2 @ tempo < que SYS_TIME
 
     ldr r3, =CALL_ALARM_QUEUE
     add r3, r3, r2, lsl #3
@@ -357,11 +423,16 @@ set_alarm:
     add r2, r2, #1
     str r2, [r3]
 
+    @ caso ok, retorna
     mov r0, #0
     mov pc, lr
-set_alarm_error1:
-    mov r0, #-1
-    mov pc, lr
-set_alarm_error2:
-    mov r0, #-2
-    mov pc, lr
+
+    @ alames ativos > que MAX_ALARMS
+    set_alarm_error1:
+        mov r0, #-1
+        mov pc, lr
+
+    @ tempo < que SYS_TIME
+    set_alarm_error2:
+        mov r0, #-2
+        mov pc, lr
