@@ -6,12 +6,13 @@ _start:
 interrupt_vector:
 b RESET_HANDLER
 b NOT_HANDLED
-b SWI_HANDLER
+.org 0x08
+b SWI_HANDLER @ interrupcoes de software
 b NOT_HANDLED
 b NOT_HANDLED
 b NOT_HANDLED
 .org 0x18
-b IRQ_HANDLER
+b IRQ_HANDLER @ interrupcao IRQ
 b NOT_HANDLED
 
 .data
@@ -220,31 +221,31 @@ read_sonar:
 
     @ FLAG 1?
     read_sonar_loop:
-      ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
-      and r2, r2, #0b1 @ r2 <- FLAG
+        ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
+        and r2, r2, #0b1 @ r2 <- FLAG
 
-      cmp r2, #1
-      beq read_sonar_loop1
+        cmp r2, #1
+        beq read_sonar_loop1
 
-      @ N: Delay 10ms / volta
+        @ N: Delay 10ms / volta
 
-      @ TODO: Delay 10ms
+        @ TODO: Delay 10ms
 
-      b read_sonar_loop
+        b read_sonar_loop
 
     read_sonar_loop1:
-      @ Y: r0 <- SONAR_DATA
-      ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
-      mov r0, r2, lsr #6
+        @ Y: r0 <- SONAR_DATA
+        ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
+        mov r0, r2, lsr #6
 
-      and r0, r0, #0b111111111111 @ r0 <- distancia
+        and r0, r0, #0b111111111111 @ r0 <- distancia
 
     mov pc, lr @ retorna r0 (distancia)
 
     @ sonar invalido
     read_sonar_erro1:
-      mov r0, #-1
-      mov pc, lr
+        mov r0, #-1
+        mov pc, lr
 
 @ register_proximity_callback (codigo: 17)
 @ Parametros:
@@ -342,9 +343,9 @@ set_motor_speed:
 @     0 caso ok
 set_motors_speed:
     cmp r0, #63
-    bhi set_motors_speed_error2 @ velocidade motor 0 inválida
+    bhi set_motors_speed_error1 @ velocidade motor 0 inválida
     cmp r1, #63
-    bhi set_motors_speed_error3 @ velocidade motor 1 inválida
+    bhi set_motors_speed_error2 @ velocidade motor 1 inválida
 
     ldr r2, =GPIO_BASE
     ldr r3, [r2, #GPIO_DR]
@@ -367,12 +368,12 @@ set_motors_speed:
     mov pc, lr
 
     @ velocidade motor 0 inválida
-    set_motors_speed_error2:
+    set_motors_speed_error1:
         mov r0, #-1
         mov pc, lr
 
     @ velocidade motor 1 inválida
-    set_motors_speed_error3:
+    set_motors_speed_error2:
         mov r0, #-2
         mov pc, lr
 
@@ -423,7 +424,7 @@ set_alarm:
     add r2, r2, #1
     str r2, [r3]
 
-    @ caso ok, retorna
+    @ ok, retorna
     mov r0, #0
     mov pc, lr
 
