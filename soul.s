@@ -205,14 +205,18 @@ read_sonar:
     orr r2, r2, r0, lsl #2 @ GPIO_DR <- SONAR_MUX <- SONAR_ID
     str r2, [r1, #GPIO_DR] @ r2 -> GPIO_DR (Data register)
 
-    @ TODO: Delay 15ms
+    @ Delay 15ms
+    mov r0, #15
+    bl delay
 
     @ TRIGGER <- 1
     ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
     orr r2, r2, #0b10 @ TRIGGER = 1
     str r2, [r1, #GPIO_DR] @ r2 -> GPIO_DR (Data register)
 
-    @ TODO: Delay 15ms
+    @ Delay 15ms
+    mov r0, #15
+    bl delay
 
     @ TRIGGER <- 0
     ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
@@ -228,8 +232,8 @@ read_sonar:
         beq read_sonar_loop1
 
         @ N: Delay 10ms / volta
-
-        @ TODO: Delay 10ms
+        mov r0, #10
+        bl delay
 
         b read_sonar_loop
 
@@ -246,6 +250,22 @@ read_sonar:
     read_sonar_erro1:
         mov r0, #-1
         mov pc, lr
+
+@ delay (read_sonar auxiliar)
+@ Parametros:
+@ r0: tempo em ms
+@ Retorno:
+@ -
+delay:
+    mov r1, #100 @ constante que depende do TIME_SZ
+    mul r1, r0, r1
+
+    delay_loop:
+    cmp r1, #0
+    subhi r1, r1, #1
+    bhi delay_loop
+
+    mov pc, lr
 
 @ register_proximity_callback (codigo: 17)
 @ Parametros:
