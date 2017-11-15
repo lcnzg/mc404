@@ -17,14 +17,27 @@ b NOT_HANDLED
 
 .data
 SYS_TIME:             .skip 4
-USER_TEXT:            .word 0x77802000
-IRQ_STACK:            .skip 512
+USER_TEXT:            .word 0x77812000
+IRQ_HANDLER_DEPTH     .word 0
+IRQ_STACK:            .skip 4096
 IRQ_STACK_BEGIN:
-SUPERVISOR_STACK:     .skip 512
+SUPERVISOR_STACK:     .skip 1024
 SUPERVISOR_STACK_BEGIN:
-CALL_ALARM_QUEUE:     .skip 96
+
+@ fila de alarmes
+@ estrutura (9 bytes cada):
+@ . apontador de subrotina [0:31]
+@ . tempo do alarme [32:63]
+@ . FLAG: alarme já chamado [64:71], só o lsb é usado
+CALL_ALARM_QUEUE:     .skip 72
 CALL_ALARM_N:         .word 0
-CALL_PROX_QUEUE:      .skip 64
+@ fila de callbacks de proximidade
+@ estrutura (12 bytes cada):
+@ . FLAG: callback já [0:0]
+@ . identificador do sonar [4 bytes]
+@ . apontador de subrotina [4 bytes]
+@ . proximidade do alarme [4 bytes]
+CALL_PROX_QUEUE:      .skip 96
 CALL_PROX_N:          .word 0
 
 SYSCALL_TABLE:
@@ -58,7 +71,7 @@ SYSCALL_TABLE:
 .set GPIO_GDIR,       0x4
 .set GPIO_PSR,        0x8
 
-.set TIME_SZ,         100
+.set TIME_SZ,         200
 
 .set USER_STACK_BEGIN,  0x80000000
 
@@ -73,10 +86,14 @@ RESET_HANDLER:
     mov r0, #0
     str r0, [r1]
 
+    ldr r1, =IRQ_HANDLER_DEPTH
+    mov r0, #0
+    str r0, [r1]
+
     msr CPSR_c, #0xD2
     ldr sp, =IRQ_STACK_BEGIN
 
-    msr CPSR_c, #0x1F
+    msr CPSR_c, #0xDF
     mov sp, #USER_STACK_BEGIN
 
     msr CPSR_c, #0xD3
@@ -91,7 +108,10 @@ SET_GPIO:
     @ configura GPIO
     ldr r1, =GPIO_BASE
 
-    ldr r0, =0b11111111111111000000000000111110 @ configuracao de entrada e saida
+    @ configuracao de entrada e saída (corrigido)
+    mov r0, #0b111110
+    orr r0, r0, 0xFF, lsl #18
+    orr r0, r0, 0x3F, lsl #26
     str r0, [r1, #GPIO_GDIR]
 
 SET_GPT:
@@ -144,14 +164,19 @@ SET_TZIC:
     ldr r0, =USER_TEXT
     ldr r0, [r0]
     msr CPSR_c, #0x10
-    bx r0
+    mov pc, r0
 
 IRQ_HANDLER:
-    @ armazena contexto na pilha
-    stmfd sp!, {r0, r1}
+    @ salva o contexto
+    push {r0-r3}
     mrs r0, spsr_all
     mrs r1, cpsr_all
-    stmfd sp!, {r0, r1, lr}
+    push {r0, r1, lr}
+
+    ldr r1, =IRQ_HANDLER_DEPTH
+    ldr r0, [r1]
+    add r0, r0, #1
+    str r0, [r1]
 
     @ permite o tratamento de interrupcões
     msr CPSR_c, #0x12
@@ -166,17 +191,85 @@ IRQ_HANDLER:
     add r0, r0, #1
     str r0, [r1]
 
-    @ TODO: callbacks e alarmes
+    @ evita tratamentos do callback múltiplos
+    ldr r0, =IRQ_HANDLER_DEPTH
+    ldr r0, [r0] 
+    cmp r0, #1
+    bhi IRQ_HANDLER_END
+
+    ldr r2, =CALL_ALARM_QUEUE
+    ldr r3, =CALL_ALARM_N
+    ldr r3, [r3]
+    add r3, r3, r2
+
+    @ executa alarme e callback de proximidade em modo privilegiado
+    @ TODO: será possível mudar isso?
+    @ não podemos simplesmente trocar para o modo usuario
+    @ por que temos que voltar no movs pc, lr
+IRQ_HANDLER_ALARM_LOOP:
+    cmp r2, r3
+    bhs IRQ_HANDLER_PROXIMITY
+
+    @ verifica o tempo do alarme, salta se o tempo tiver passado
+    ldr r0, [r2, #4]
+    ldr r1, =SYS_TIME
+    ldr r1, [r1]
+    cmp r0, r1
+    addls r2, r2, #9
+    bls IRQ_HANDLER_ALARM @ não passou o tempo
+    ldrb r0, [r2, #8]
+    cmp r0, #1
+    addeq r2, r2, #9
+    beq IRQ_HANDLER_ALARM @ já processado
+ 
+    mov r0, #1
+    strb r0, [r2, #8]
+    ldr r0, [r2]
+    push {r0-r3}
+    blx r0
+    pop {r0-r3}
+    
+    add r2, r2, #9
+    b IRQ_HANDLER_ALARM_LOOP
+IRQ_HANDLER_ALARM_END:
+    ldr r2, =CALL_PROX_QUEUE
+    ldr r3, =CALL_PROX_N
+    ldr r3, [r3]
+    add r3, r3, r2
+IRQ_HANDLER_PROXIMITY_LOOP:
+    cmp r2, r3
+    bhs IRQ_HANDLER_END
+
+    ldr r0, [r2]
+    bl read_sonar
+    ldr r1, [r2, #4]
+    cmp r0, r1
+    addhs r2, r2, #12
+    bhs IRQ_HANDLER_PROXIMITY_LOOP @ distância acima do limiar
+
+    ldr r0, [r2, #8]
+    push {r0-r3}
+    blx r0
+    pop {r0-r3}
+
+    add r2, r2, #12
+    b IRQ_HANDLER_PROXIMITY_LOOP
+IRQ_HANDLER_END:
+    ldr r1, =IRQ_HANDLER_DEPTH
+    ldr r0, [r1]
+    sub r0, r0, #1
+    str r0, [r1]
 
     ldmfd sp!, {r0, r1, lr}
-    mrs r1, cpsr_all
-    msr spsr_all, r0
-    stmfd sp!, {r0, r1}
+    msr cpsr_all, r0
+    msr spsr_all, r1
+    stmfd sp!, {r0-r3}
 
     sub lr, lr, #4
     movs pc, lr
 
 SWI_HANDLER:
+    @ calcula offset em r2 e salta para syscall
     ldr r2, =SYSCALL_TABLE
     ldr r2, [r2, r7, lsl #2]
     sub r2, r2, #64
@@ -192,6 +285,7 @@ NOT_HANDLED:
 @ Retorno:
 @ r0: distancia / -1: sonar invalido
 read_sonar:
+    push {lr}
     cmp r0, #15
     bhi read_sonar_erro1 @ sonar invalido
 
@@ -244,26 +338,27 @@ read_sonar:
 
         and r0, r0, #0b111111111111 @ r0 <- distancia
 
-    mov pc, lr @ retorna r0 (distancia)
+    pop {pc} @ retorna r0 (distancia)
 
     @ sonar invalido
     read_sonar_erro1:
         mov r0, #-1
-        mov pc, lr
+        pop {pc} @ retorna r0 (distancia)
 
 @ delay (read_sonar auxiliar)
 @ Parametros:
-@ r0: tempo em ms
+@ r0: tempo em ms aproximado
 @ Retorno:
 @ -
 delay:
-    mov r1, #100 @ constante que depende do TIME_SZ
-    mul r1, r0, r1
+    @ multiplicacao por 10
+    mov r0, r0, lsl #1
+    add r0, r0, r0, lsl #2
 
+    @ loop com 2 instrucoes, 2 x 10 instrucoes no loop
     delay_loop:
-    cmp r1, #0
-    subhi r1, r1, #1
-    bhi delay_loop
+    subs r0, r0, #1
+    bhs delay_loop
 
     mov pc, lr
 
@@ -439,6 +534,8 @@ set_alarm:
     add r3, r3, r2, lsl #3
     str r0, [r3]
     str r1, [r3, #4]
+    eor r1, r1, r1
+    strb r1, [r3, #8]
 
     ldr r3, =CALL_ALARM_N
     add r2, r2, #1
