@@ -91,7 +91,7 @@ SET_GPIO:
     @ configura GPIO
     ldr r1, =GPIO_BASE
 
-    mov r0, #0b11111111111111000000000000111110 @ configuracao de entrada e saida
+    ldr r0, =0b11111111111111000000000000111110 @ configuracao de entrada e saida
     str r0, [r1, #GPIO_GDIR]
 
 SET_GPT:
