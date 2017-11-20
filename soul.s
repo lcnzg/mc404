@@ -193,7 +193,7 @@ IRQ_HANDLER:
 
     @ evita tratamentos do callback múltiplos
     ldr r0, =IRQ_HANDLER_DEPTH
-    ldr r0, [r0] 
+    ldr r0, [r0]
     cmp r0, #1
     bhi IRQ_HANDLER_END
 
@@ -221,14 +221,14 @@ IRQ_HANDLER_ALARM_LOOP:
     cmp r0, #1
     addeq r2, r2, #9
     beq IRQ_HANDLER_ALARM @ já processado
- 
+
     mov r0, #1
     strb r0, [r2, #8]
     ldr r0, [r2]
     push {r0-r3}
     blx r0
     pop {r0-r3}
-    
+
     add r2, r2, #9
     b IRQ_HANDLER_ALARM_LOOP
 IRQ_HANDLER_ALARM_END:
@@ -516,6 +516,7 @@ set_time:
 @ Parametros:
 @ r0: ponteiro funcao caso alarme
 @ r1: tempo do sistema
+@ Retorno:
 @ r0: -1 se qtd alarmes ativos maior que MAX_ALARMS
 @     -2 se tempo menor que tempo atual sistema
 @     0 caso ok
