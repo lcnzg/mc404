@@ -18,7 +18,7 @@ b NOT_HANDLED
 .data
 SYS_TIME:             .skip 4
 USER_TEXT:            .word 0x77812000
-IRQ_HANDLER_DEPTH     .word 0
+IRQ_HANDLER_DEPTH:    .word 0
 IRQ_STACK:            .skip 4096
 IRQ_STACK_BEGIN:
 SUPERVISOR_STACK:     .skip 1024
@@ -108,10 +108,8 @@ SET_GPIO:
     @ configura GPIO
     ldr r1, =GPIO_BASE
 
-    @ configuracao de entrada e saída (corrigido)
-    mov r0, #0b111110
-    orr r0, r0, 0xFF, lsl #18
-    orr r0, r0, 0x3F, lsl #26
+    @ configuracao de entrada e saída
+    ldr r0, =0b11111111111111000000000000111110
     str r0, [r1, #GPIO_GDIR]
 
 SET_GPT:
@@ -208,7 +206,7 @@ IRQ_HANDLER:
     @ por que temos que voltar no movs pc, lr
 IRQ_HANDLER_ALARM_LOOP:
     cmp r2, r3
-    bhs IRQ_HANDLER_PROXIMITY
+    bhs IRQ_HANDLER_PROXIMITY @ erro
 
     @ verifica o tempo do alarme, salta se o tempo tiver passado
     ldr r0, [r2, #4]
@@ -216,11 +214,11 @@ IRQ_HANDLER_ALARM_LOOP:
     ldr r1, [r1]
     cmp r0, r1
     addls r2, r2, #9
-    bls IRQ_HANDLER_ALARM @ não passou o tempo
+    bls IRQ_HANDLER_ALARM @ não passou o tempo (erro)
     ldrb r0, [r2, #8]
     cmp r0, #1
     addeq r2, r2, #9
-    beq IRQ_HANDLER_ALARM @ já processado
+    beq IRQ_HANDLER_ALARM @ já processado (erro)
 
     mov r0, #1
     strb r0, [r2, #8]
@@ -336,7 +334,9 @@ read_sonar:
         ldr r2, [r1, #GPIO_DR] @ r2 <- GPIO_DR (Data register)
         mov r0, r2, lsr #6
 
-        and r0, r0, #0b111111111111 @ r0 <- distancia
+        ldr r2, =0b111111111111
+
+        and r0, r0, r2 @ r0 <- distancia
 
     pop {pc} @ retorna r0 (distancia)
 
