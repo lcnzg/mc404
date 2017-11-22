@@ -17,7 +17,6 @@ b NOT_HANDLED
 
 .data
 SYS_TIME:             .skip 4
-USER_TEXT:            .word 0x77812000
 IRQ_HANDLER_DEPTH:    .word 0
 IRQ_STACK:            .skip 4096
 IRQ_STACK_BEGIN:
@@ -68,6 +67,7 @@ CALL_PROX_N:          .word 0
 .set TIME_SZ,         200
 
 .set USER_STACK_BEGIN,  0x7F000000
+.set USER_TEXT,         0x77812000
 
 .set MAX_CALLBACKS,   8
 .set MAX_ALARMS,      8
@@ -188,7 +188,6 @@ IRQ_HANDLER:
     ldr r2, =CALL_ALARM_QUEUE
     mov r3, #MAX_ALARMS
     add r3, r2, r3, lsl #3
-
 IRQ_HANDLER_ALARM_LOOP:
     cmp r2, r3
     bhs IRQ_HANDLER_ALARM_END
@@ -228,7 +227,6 @@ IRQ_HANDLER_ALARM_END:
     mov r3, #MAX_CALLBACKS
     add r1, r2, r3, lsl #3
     add r3, r1, r3, lsl #2
-
 IRQ_HANDLER_PROXIMITY_LOOP:
     cmp r2, r3
     beq IRQ_HANDLER_END
@@ -277,7 +275,7 @@ IRQ_HANDLER_END:
     sub lr, lr, #4
     movs pc, lr
 
-@ Chama as funcoes associadas as syscalls
+@ Chama as funcoes relacionadas as SYSCALLS
 SWI_HANDLER:
     cmp r7, #16
     bleq read_sonar
@@ -560,7 +558,6 @@ set_alarm:
     str r3, [r2]
 
     ldr r3, =CALL_ALARM_QUEUE
-
 set_alarm_place:
     ldr r2, [r3], #8
     cmp r2, #0
@@ -583,7 +580,7 @@ set_alarm_error2: @ tempo < que SYS_TIME
 
 @ up_privilege (codigo: 23)
 @ Parametros: sem parametros.
-@ Retorno: sem retorno
+@ Retorno: sem retornol
 up_privilege:
     @ quando volta da syscall, o código passa a rodar em modo SYSTEM
     msr SPSR_c, #0x1F
