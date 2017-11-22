@@ -160,7 +160,7 @@ SET_TZIC: @ configura TZIC
     str	r0, [r1, #TZIC_INTCTRL]
 
     @ transfere código para o usuário
-    ldr r0, =#USER_TEXT
+    ldr r0, =USER_TEXT
     msr CPSR_c, #0x10
     mov pc, r0
 
@@ -287,6 +287,7 @@ IRQ_HANDLER_END:
 
 @ Chama as funcoes relacionadas as SYSCALLS
 SWI_HANDLER:
+    push {lr}
     cmp r7, #16
     bleq read_sonar
     cmp r7, #17
@@ -303,6 +304,7 @@ SWI_HANDLER:
     bleq set_alarm
     cmp r7, #23
     bleq up_privilege
+    pop {lr}
     movs pc, lr
 
 NOT_HANDLED:
