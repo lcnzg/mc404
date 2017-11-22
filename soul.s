@@ -286,13 +286,22 @@ IRQ_HANDLER_END:
     movs pc, lr
 
 SWI_HANDLER:
-    @ calcula offset em r4 e salta para syscall
-    push {r4}
-    ldr r4, =SYSCALL_TABLE
-    ldr r4, [r4, r7, lsl #2]
-    sub r4, r4, #64
-    blx r4
-    pop {r4}
+    cmp r7, #16
+    bleq read_sonar
+    cmp r7, #17
+    bleq register_proximity_callback
+    cmp r7, #18
+    bleq set_motor_speed
+    cmp r7, #19
+    bleq set_motors_speed
+    cmp r7, #20
+    bleq get_time
+    cmp r7, #21
+    bleq set_time
+    cmp r7, #22
+    bleq set_alarm
+    cmp r7, #23
+    bleq up_privilege
     movs pc, lr
 
 NOT_HANDLED:
