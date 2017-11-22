@@ -212,15 +212,15 @@ IRQ_HANDLER_ALARM_LOOP:
     ldr r1, =SYS_TIME
     ldr r1, [r1]
     cmp r0, r1
-    addo r2, r2, #8
+    addlo r2, r2, #8
     blo IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
 
     push {r2-r3}
-    msr CPSR_C, #0x10
+    msr CPSR_c, #0x10
     blx r0
     mov r7, #23 @ muda para o modo system
     svc 0x0
-    msr CPSR_C, #0x12
+    msr CPSR_c, #0x12
     pop {r2-r3}
 
     mov r0, #0
@@ -236,8 +236,8 @@ IRQ_HANDLER_ALARM_LOOP:
 IRQ_HANDLER_ALARM_END:
     ldr r2, =CALL_PROX_QUEUE
     mov r3, #MAX_CALLBACKS
-    add r3, r2, #MAX_CALLBACKS, lsl #3
-    add r3, r3, #MAX_CALLBACKS, lsl #2
+    add r1, r2, r3, lsl #3
+    add r3, r1, r3, lsl #2
 IRQ_HANDLER_PROXIMITY_LOOP:
     cmp r2, r3
     beq IRQ_HANDLER_END
@@ -255,11 +255,11 @@ IRQ_HANDLER_PROXIMITY_LOOP:
     bhs IRQ_HANDLER_PROXIMITY_LOOP @ distância acima do limiar
 
     push {r2-r3}
-    msr CPSR_C, #0x10
+    msr CPSR_c, #0x10
     blx r0
     mov r7, #23 @ muda para o modo system
     svc 0x0
-    msr CPSR_C, #0x12
+    msr CPSR_c, #0x12
     pop {r2-r3}
 
     mov r0, #0
@@ -407,7 +407,7 @@ register_proximity_callback:
 register_proximity_callback_place:
     ldr r2, [r3], #12
     cmp r2, #0
-    bne r2 register_proximity_callback_place
+    bne register_proximity_callback_place
 
     sub r3, r3, #12
     str r2, [r3]
@@ -420,7 +420,6 @@ register_proximity_callback_place:
 register_proximity_callback_error1: @ callbacks ativos >= MAX_CALLBACKS
     mov r0, #-1
     mov pc, lr
-
 register_proximity_callback_error2: @ sonar inválido
     mov r0, #-2
     mov pc, lr
@@ -573,7 +572,7 @@ set_alarm_error2: @ tempo < que SYS_TIME
 @ up_privilege (codigo: 23)
 @ Parametros: sem parametros.
 @ Retorno: sem retornol
-up_privilege
+up_privilege:
     @ quando volta da syscall, o código passa a rodar em modo SYSTEM
-    mov SPSR_C, #0x1F
+    msr SPSR_c, #0x1F
     mov pc, lr
