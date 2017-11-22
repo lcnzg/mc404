@@ -43,6 +43,16 @@ CALL_ALARM_N:         .word 0
 CALL_PROX_QUEUE:      .zero 96
 CALL_PROX_N:          .word 0
 
+SYSCALL_TABLE:
+.word read_sonar
+.word register_proximity_callback
+.word set_motor_speed
+.word set_motors_speed
+.word get_time
+.word set_time
+.word set_alarm
+.word up_privilege @ permite sair do modo de usuário
+
 @ Constantes para os enderecos do GPT
 .set GPT_BASE,        0x53FA0000
 .set GPT_CR,          0x0
@@ -188,7 +198,6 @@ IRQ_HANDLER:
     ldr r2, =CALL_ALARM_QUEUE
     mov r3, #MAX_ALARMS
     add r3, r2, r3, lsl #3
-
 IRQ_HANDLER_ALARM_LOOP:
     cmp r2, r3
     bhs IRQ_HANDLER_ALARM_END
@@ -228,7 +237,6 @@ IRQ_HANDLER_ALARM_END:
     mov r3, #MAX_CALLBACKS
     add r1, r2, r3, lsl #3
     add r3, r1, r3, lsl #2
-
 IRQ_HANDLER_PROXIMITY_LOOP:
     cmp r2, r3
     beq IRQ_HANDLER_END
@@ -277,32 +285,23 @@ IRQ_HANDLER_END:
     sub lr, lr, #4
     movs pc, lr
 
-@ Chama as funcoes associadas as syscalls
 SWI_HANDLER:
     cmp r7, #16
     bleq read_sonar
-
     cmp r7, #17
     bleq register_proximity_callback
-
     cmp r7, #18
     bleq set_motor_speed
-
     cmp r7, #19
     bleq set_motors_speed
-
     cmp r7, #20
     bleq get_time
-
     cmp r7, #21
     bleq set_time
-
     cmp r7, #22
     bleq set_alarm
-
     cmp r7, #23
     bleq up_privilege
-
     movs pc, lr
 
 NOT_HANDLED:
@@ -562,7 +561,6 @@ set_alarm:
     str r3, [r2]
 
     ldr r3, =CALL_ALARM_QUEUE
-
 set_alarm_place:
     ldr r2, [r3], #8
     cmp r2, #0
@@ -585,7 +583,7 @@ set_alarm_error2: @ tempo < que SYS_TIME
 
 @ up_privilege (codigo: 23)
 @ Parametros: sem parametros.
-@ Retorno: sem retorno
+@ Retorno: sem retornol
 up_privilege:
     @ quando volta da syscall, o código passa a rodar em modo SYSTEM
     msr SPSR_c, #0x1F
