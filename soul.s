@@ -201,7 +201,7 @@ IRQ_HANDLER:
     add r3, r2, r3, lsl #3
 IRQ_HANDLER_ALARM_LOOP:
     cmp r2, r3
-    bhs IRQ_HANDLER_PROXIMITY
+    bhs IRQ_HANDLER_ALARM_END
 
     ldr r1, [r2]
     cmp r1, #0
