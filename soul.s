@@ -166,7 +166,7 @@ SET_TZIC: @ configura TZIC
 
 IRQ_HANDLER:
     @ salva o contexto
-    push {r0-r3, r7}
+    push {r0-r7}
     mrs r0, spsr_all
     mrs r1, cpsr_all
     push {r0, r1, lr}
@@ -214,6 +214,8 @@ IRQ_HANDLER_ALARM_LOOP:
     addlo r2, r2, #8
     blo IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
 
+    str r0, [r2] @ ponteiro para callback
+
     push {r2-r3}
     msr CPSR_c, #0x10
     blx r0
@@ -253,6 +255,8 @@ IRQ_HANDLER_PROXIMITY_LOOP:
     addhs r2, r2, #12
     bhs IRQ_HANDLER_PROXIMITY_LOOP @ distância acima do limiar
 
+    str r0, [r2]
+
     push {r2-r3}
     msr CPSR_c, #0x10
     blx r0
@@ -278,9 +282,9 @@ IRQ_HANDLER_END:
     str r0, [r1]
 
     pop {r0, r1, lr}
-    msr cpsr_all, r0
-    msr spsr_all, r1
-    pop {r0-r3, r7}
+    msr cpsr_all, r1
+    msr spsr_all, r0
+    pop {r0-r7}    
 
     sub lr, lr, #4
     movs pc, lr
@@ -506,8 +510,8 @@ set_motors_speed:
     mov r0, r0, lsl #1
     and r1, r1, #0b111111
     mov r1, r1, lsl #1
-    orreq r3, r3, r0, lsl #18
-    orrne r3, r3, r1, lsl #25
+    orr r3, r3, r0, lsl #18
+    orr r3, r3, r1, lsl #25
     str r3, [r2, #GPIO_DR]
 
     mov r0, #0
@@ -586,8 +590,9 @@ set_alarm_error2: @ tempo < que SYS_TIME
 
 @ up_privilege (codigo: 23)
 @ Parametros: sem parametros.
-@ Retorno: sem retornol
+@ Retorno: sem retorno.
 up_privilege:
-    @ quando volta da syscall, o código passa a rodar em modo SYSTEM
+    @ quando volta da syscall, o codigo passa a rodar em modo SYSTEM
     msr SPSR_c, #0x1F
     mov pc, lr
+
