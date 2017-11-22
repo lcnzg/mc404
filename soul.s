@@ -77,7 +77,7 @@ SYSCALL_TABLE:
 
 .set TIME_SZ,         200
 
-.set USER_STACK_BEGIN,  0x80000000
+.set USER_STACK_BEGIN,  0x7F000000
 
 .set MAX_CALLBACKS,   8
 .set MAX_ALARMS,      8
@@ -160,8 +160,7 @@ SET_TZIC: @ configura TZIC
     str	r0, [r1, #TZIC_INTCTRL]
 
     @ transfere código para o usuário
-    ldr r0, =USER_TEXT
-    ldr r0, [r0]
+    ldr r0, =0x77812000
     msr CPSR_c, #0x10
     mov pc, r0
 
