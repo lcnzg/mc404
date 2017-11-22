@@ -24,20 +24,23 @@ IRQ_STACK_BEGIN:
 SUPERVISOR_STACK:     .skip 1024
 SUPERVISOR_STACK_BEGIN:
 
+@ funcionamentos das filas:
+@ As filas são zeradas por padrão. Uma posição com o primeiro campo
+@ nao nulo irá armazenar alarme/callback válido. Os alarmes/callbacks
+@ são sempre desativados depois de executados.
+@
 @ fila de alarmes
-@ estrutura (9 bytes cada):
-@ . apontador de subrotina [0:31]
-@ . tempo do alarme [32:63]
-@ . FLAG: alarme já chamado [64:71], só o lsb é usado
-CALL_ALARM_QUEUE:     .skip 72
+@ estrutura (8 bytes cada):
+@ . apontador de subrotina [4 bytes]
+@ . tempo do alarme [4 bytes]
+CALL_ALARM_QUEUE:     .zero 72
 CALL_ALARM_N:         .word 0
 @ fila de callbacks de proximidade
 @ estrutura (12 bytes cada):
-@ . FLAG: callback já [0:0]
-@ . identificador do sonar [4 bytes]
 @ . apontador de subrotina [4 bytes]
+@ . identificador do sonar [4 bytes]
 @ . proximidade do alarme [4 bytes]
-CALL_PROX_QUEUE:      .skip 96
+CALL_PROX_QUEUE:      .zero 96
 CALL_PROX_N:          .word 0
 
 SYSCALL_TABLE:
@@ -48,6 +51,7 @@ SYSCALL_TABLE:
 .word get_time
 .word set_time
 .word set_alarm
+.word up_privilege @ permite sair do modo de usuário
 
 @ Constantes para os enderecos do GPT
 .set GPT_BASE,        0x53FA0000
@@ -166,7 +170,7 @@ SET_TZIC:
 
 IRQ_HANDLER:
     @ salva o contexto
-    push {r0-r3}
+    push {r0-r3, r7}
     mrs r0, spsr_all
     mrs r1, cpsr_all
     push {r0, r1, lr}
@@ -196,58 +200,77 @@ IRQ_HANDLER:
     bhi IRQ_HANDLER_END
 
     ldr r2, =CALL_ALARM_QUEUE
-    ldr r3, =CALL_ALARM_N
-    ldr r3, [r3]
-    add r3, r3, r2
+    add r3, r2, #MAX_ALARMS
 
-    @ executa alarme e callback de proximidade em modo privilegiado
-    @ TODO: será possível mudar isso?
-    @ não podemos simplesmente trocar para o modo usuario
-    @ por que temos que voltar no movs pc, lr
+    @ executa alarmes e callbacks em modo usuário
 IRQ_HANDLER_ALARM_LOOP:
     cmp r2, r3
-    bhs IRQ_HANDLER_PROXIMITY @ erro
+    bhs IRQ_HANDLER_PROXIMITY
 
     @ verifica o tempo do alarme, salta se o tempo tiver passado
     ldr r0, [r2, #4]
     ldr r1, =SYS_TIME
     ldr r1, [r1]
     cmp r0, r1
-    addls r2, r2, #9
-    bls IRQ_HANDLER_ALARM @ não passou o tempo (erro)
-    ldrb r0, [r2, #8]
-    cmp r0, #1
-    addeq r2, r2, #9
-    beq IRQ_HANDLER_ALARM @ já processado (erro)
+    addls r2, r2, #8
+    bls IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
+    ldrb r0, [r2]
+    cmp r0, #0
+    addeq r2, r2, #8
+    beq IRQ_HANDLER_ALARM_LOOP @ sem alarme valido
 
-    mov r0, #1
-    strb r0, [r2, #8]
-    ldr r0, [r2]
     push {r0-r3}
+    msr CPSR_C, #0x10
     blx r0
+    mov r7, #23 @ muda para o modo system
+    svc 0x0
+    msr CPSR_C, #0x12
+    mov r0, #0
+
+    str r0, [r2] @ anula o alarme
+    ldr r1, =CALL_ALARM_N
+    ldr r0, [r1]
+    sub r0, r0, #1
+    str r0, [r1]
     pop {r0-r3}
 
-    add r2, r2, #9
+    add r2, r2, #8
     b IRQ_HANDLER_ALARM_LOOP
+
 IRQ_HANDLER_ALARM_END:
     ldr r2, =CALL_PROX_QUEUE
-    ldr r3, =CALL_PROX_N
-    ldr r3, [r3]
-    add r3, r3, r2
+    add r3, r2, #MAX_CALLBACKS
 IRQ_HANDLER_PROXIMITY_LOOP:
     cmp r2, r3
     bhs IRQ_HANDLER_END
 
     ldr r0, [r2]
+    cmp r0, #0
+    addeq r2, r2, #12
+    bhs IRQ_HANDLER_PROXIMITY_LOOP @ sem callback valido
+    ldr r0, [r2, #4]
     bl read_sonar
     ldr r1, [r2, #4]
     cmp r0, r1
     addhs r2, r2, #12
     bhs IRQ_HANDLER_PROXIMITY_LOOP @ distância acima do limiar
+    ldr r0, [r2, #4]
+    bl read_sonar
+
 
     ldr r0, [r2, #8]
     push {r0-r3}
+    msr CPSR_C, #0x10
     blx r0
+    mov r7, #23 @ muda para o modo system
+    svc 0x0
+    msr CPSR_C, #0x12
+    mov r0, #0
+    str r0, [r2] @ anula a callback
+    ldr r1, =CALL_PROX_N
+    ldr r0, [r1]
+    sub r0, r0, #1
+    str r0, [r1]
     pop {r0-r3}
 
     add r2, r2, #12
@@ -258,10 +281,10 @@ IRQ_HANDLER_END:
     sub r0, r0, #1
     str r0, [r1]
 
-    ldmfd sp!, {r0, r1, lr}
+    pop {r0, r1, lr}
     msr cpsr_all, r0
     msr spsr_all, r1
-    stmfd sp!, {r0-r3}
+    pop {r0-r3, r7}
 
     sub lr, lr, #4
     movs pc, lr
@@ -383,8 +406,8 @@ register_proximity_callback:
     ldr r3, =CALL_PROX_QUEUE
     add r3, r3, r2, lsl #3
     add r3, r3, r2, lsl #2
-    str r0, [r3]
-    str r1, [r3, #4]
+    str r0, [r3, #4]
+    str r1, [r3]
     str r2, [r3, #8]
     mov r0, #0
     str r0, [r3, #12]
@@ -555,3 +578,11 @@ set_alarm:
     set_alarm_error2:
         mov r0, #-2
         mov pc, lr
+
+@ up_privilege (codigo: 23)
+@ Parametros: sem parametros
+@ Retorno: sem retorno
+up_privilege
+    @ quando volta da syscall, o código passa a rodar em modo SYSTEM
+    mov SPSR_C, #0x1F
+    mov pc, lr
