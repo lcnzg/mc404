@@ -26,14 +26,14 @@ SUPERVISOR_STACK_BEGIN:
 
 @ funcionamentos das filas:
 @ As filas são zeradas por padrão. Uma posição com o primeiro campo
-@ nao nulo irá armazenar alarme/callback válido. Os alarmes/callbacks
+@ nao nulo irá armazenar um alarme/callback válido. Os alarmes/callbacks
 @ são sempre desativados depois de executados.
 @
 @ fila de alarmes
 @ estrutura (8 bytes cada):
 @ . apontador de subrotina [4 bytes]
 @ . tempo do alarme [4 bytes]
-CALL_ALARM_QUEUE:     .zero 72
+CALL_ALARM_QUEUE:     .zero 64
 CALL_ALARM_N:         .word 0
 @ fila de callbacks de proximidade
 @ estrutura (12 bytes cada):
@@ -108,16 +108,14 @@ RESET_HANDLER:
 
     mcr p15, 0, r0, c12, c0, 0
 
-SET_GPIO:
-    @ configura GPIO
+SET_GPIO: @ configura GPIO
     ldr r1, =GPIO_BASE
 
     @ configuracao de entrada e saída
     ldr r0, =0b11111111111111000000000000111110
     str r0, [r1, #GPIO_GDIR]
 
-SET_GPT:
-    @ configura GPT
+SET_GPT: @ configura GPT
     ldr r1, =GPT_BASE
 
     mov r0, #0x41
@@ -133,8 +131,7 @@ SET_GPT:
     mov r0, #1
     str r0, [r1, #GPT_IR]
 
-SET_TZIC:
-    @ configura TZIC
+SET_TZIC: @ configura TZIC
     ldr	r1, =TZIC_BASE
 
     @ Configura interrupcao 39 do GPT como nao segura
@@ -193,88 +190,88 @@ IRQ_HANDLER:
     add r0, r0, #1
     str r0, [r1]
 
-    @ evita tratamentos do callback múltiplos
+    @ evita tratamentos se a excecao do tipo irq é gerada frequentemente
     ldr r0, =IRQ_HANDLER_DEPTH
     ldr r0, [r0]
     cmp r0, #1
     bhi IRQ_HANDLER_END
 
     ldr r2, =CALL_ALARM_QUEUE
-    add r3, r2, #MAX_ALARMS
-
-    @ executa alarmes e callbacks em modo usuário
+    mov r3, #MAX_ALARMS
+    add r3, r2, r3, lsl #3
 IRQ_HANDLER_ALARM_LOOP:
     cmp r2, r3
     bhs IRQ_HANDLER_PROXIMITY
 
-    @ verifica o tempo do alarme, salta se o tempo tiver passado
+    ldr r1, [r2]
+    cmp r1, #0
+    addeq r2, r2, #8
+    beq IRQ_HANDLER_ALARM_LOOP @ sem alarme válido
+
     ldr r0, [r2, #4]
     ldr r1, =SYS_TIME
     ldr r1, [r1]
     cmp r0, r1
-    addls r2, r2, #8
-    bls IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
-    ldrb r0, [r2]
-    cmp r0, #0
-    addeq r2, r2, #8
-    beq IRQ_HANDLER_ALARM_LOOP @ sem alarme valido
+    addo r2, r2, #8
+    blo IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
 
-    push {r0-r3}
+    push {r2-r3}
     msr CPSR_C, #0x10
     blx r0
     mov r7, #23 @ muda para o modo system
     svc 0x0
     msr CPSR_C, #0x12
-    mov r0, #0
+    pop {r2-r3}
 
+    mov r0, #0
     str r0, [r2] @ anula o alarme
     ldr r1, =CALL_ALARM_N
     ldr r0, [r1]
     sub r0, r0, #1
     str r0, [r1]
-    pop {r0-r3}
 
     add r2, r2, #8
     b IRQ_HANDLER_ALARM_LOOP
 
 IRQ_HANDLER_ALARM_END:
     ldr r2, =CALL_PROX_QUEUE
-    add r3, r2, #MAX_CALLBACKS
+    mov r3, #MAX_CALLBACKS
+    add r3, r2, #MAX_CALLBACKS, lsl #3
+    add r3, r3, #MAX_CALLBACKS, lsl #2
 IRQ_HANDLER_PROXIMITY_LOOP:
     cmp r2, r3
-    bhs IRQ_HANDLER_END
+    beq IRQ_HANDLER_END
 
     ldr r0, [r2]
     cmp r0, #0
     addeq r2, r2, #12
     bhs IRQ_HANDLER_PROXIMITY_LOOP @ sem callback valido
+
     ldr r0, [r2, #4]
     bl read_sonar
-    ldr r1, [r2, #4]
+    ldr r1, [r2, #8]
     cmp r0, r1
     addhs r2, r2, #12
     bhs IRQ_HANDLER_PROXIMITY_LOOP @ distância acima do limiar
-    ldr r0, [r2, #4]
-    bl read_sonar
 
-
-    ldr r0, [r2, #8]
-    push {r0-r3}
+    push {r2-r3}
     msr CPSR_C, #0x10
     blx r0
     mov r7, #23 @ muda para o modo system
     svc 0x0
     msr CPSR_C, #0x12
+    pop {r2-r3}
+
     mov r0, #0
     str r0, [r2] @ anula a callback
     ldr r1, =CALL_PROX_N
     ldr r0, [r1]
     sub r0, r0, #1
     str r0, [r1]
-    pop {r0-r3}
 
     add r2, r2, #12
     b IRQ_HANDLER_PROXIMITY_LOOP
+
 IRQ_HANDLER_END:
     ldr r1, =IRQ_HANDLER_DEPTH
     ldr r0, [r1]
@@ -374,7 +371,7 @@ read_sonar:
 @ Retorno:
 @ -
 delay:
-    @ multiplicacao por 10
+    @ multiplicação por 10
     mov r0, r0, lsl #1
     add r0, r0, r0, lsl #2
 
@@ -389,51 +386,53 @@ delay:
 @ Parametros:
 @ r0: identificador do sonar (0 a 15)
 @ r1: limiar de distancia
-@ r2: ponteiro funcao caso alarme
+@ r2: apontador para subrotina de callback
 @ Retorno:
-@ r0: -1 se callbacks maior que MAX_CALLBACKS
-@     -2 se sonar invalido
-@     0 se não
+@ r0: -1 se a qtd de callbacks ativos é maior ou igual que MAX_CALLBACKS.
+@     -2 se o identificador do sonar é inválido.
+@     0 caso contrário
 register_proximity_callback:
-    ldr r3, =CALL_PROX_N
-    ldr r3, [r3]
+    ldr r2, =CALL_PROX_N
+    ldr r3, [r2]
     cmp r3, #MAX_CALLBACKS
-    bhi register_proximity_callback_error1 @ > que MAX_CALLBACKS
+    bhs register_proximity_callback_error1 @ callbacks >= MAX_CALLBACKS
 
     cmp r0, #15
-    bhi register_proximity_callback_error2 @ sonar invalido
+    bhi register_proximity_callback_error2 @ sonar inválido
+
+    add r3, r3, #1
+    str r3, [r2]
 
     ldr r3, =CALL_PROX_QUEUE
-    add r3, r3, r2, lsl #3
-    add r3, r3, r2, lsl #2
-    str r0, [r3, #4]
-    str r1, [r3]
-    str r2, [r3, #8]
-    mov r0, #0
-    str r0, [r3, #12]
+register_proximity_callback_place:
+    ldr r2, [r3], #12
+    cmp r2, #0
+    bne r2 register_proximity_callback_place
 
-    @ ok, retorna
+    sub r3, r3, #12
+    str r2, [r3]
+    str r0, [r3, #4]
+    str r1, [r3, #8]
+
     mov r0, #0
     mov pc, lr
 
-    @ > que MAX_CALLBACKS
-    register_proximity_callback_error1:
-        mov r0, #-1
-        mov pc, lr
+register_proximity_callback_error1: @ callbacks ativos >= MAX_CALLBACKS
+    mov r0, #-1
+    mov pc, lr
 
-    @ sonar invalido
-    register_proximity_callback_error2:
-        mov r0, #-2
-        mov pc, lr
+register_proximity_callback_error2: @ sonar inválido
+    mov r0, #-2
+    mov pc, lr
 
 @ set_motor_speed (codigo: 18)
 @ Parametros:
 @ r0: identificador do motor (0 ou 1)
 @ r1: velocidade
 @ Retorno:
-@ r0: -1 se motor invalido
-@     -2 se velocidade invalida
-@     0 caso ok
+@ r0: -1 se indentificador do motor é invalido
+@     -2 se velocidade é invalida
+@     0 caso contrário
 set_motor_speed:
     cmp r0, #0
     cmpne r0, #1
@@ -457,19 +456,15 @@ set_motor_speed:
 
     str r3, [r2, #GPIO_DR]
 
-    @ ok, retorna
     mov r0, #0
     mov pc, lr
 
-    @ motor inválido
-    set_motor_speed_error1:
-      mov r0, #-1
-      mov pc, lr
-
-    @ velocidade inválida
-    set_motor_speed_error2:
-      mov r0, #-2
-      mov pc, lr
+set_motor_speed_error1: @ motor inválido
+    mov r0, #-1
+    mov pc, lr
+set_motor_speed_error2: @ velocidade inválida
+    mov r0, #-2
+    mov pc, lr
 
 @ set_motors_speed (codigo: 19)
 @ Parametros:
@@ -501,19 +496,15 @@ set_motors_speed:
     orrne r3, r3, r1, lsl #25
     str r3, [r2, #GPIO_DR]
 
-    @ ok, retorna
     mov r0, #0
     mov pc, lr
 
-    @ velocidade motor 0 inválida
-    set_motors_speed_error1:
-        mov r0, #-1
-        mov pc, lr
-
-    @ velocidade motor 1 inválida
-    set_motors_speed_error2:
-        mov r0, #-2
-        mov pc, lr
+set_motors_speed_error1: @ velocidade do motor 0 inválida
+    mov r0, #-1
+    mov pc, lr
+set_motors_speed_error2: @ velocidade do motor 1 inválida
+    mov r0, #-2
+    mov pc, lr
 
 @ get_time (codigo: 20)
 @ Parametros:
@@ -537,51 +528,51 @@ set_time:
 
 @ set_alarm (codigo: 22)
 @ Parametros:
-@ r0: ponteiro funcao caso alarme
-@ r1: tempo do sistema
+@ r0: apontador para subrotina de alarme
+@ r1: tempo do alarme
 @ Retorno:
-@ r0: -1 se qtd alarmes ativos maior que MAX_ALARMS
-@     -2 se tempo menor que tempo atual sistema
-@     0 caso ok
+@ r0: -1 se a qtd alarmes ativos for maior ou igual que MAX_ALARMS.
+@     -2 se o tempo do alarme for menor que o atual do sistema.
+@     0 caso contrário
 set_alarm:
     ldr r2, =CALL_ALARM_N
-    ldr r2, [r2]
-    cmp r2, #MAX_ALARMS
-    bhi set_alarm_error1 @ alames ativos > que MAX_ALARMS
+    ldr r3, [r2]
+    cmp r3, #MAX_ALARMS
+    bhs set_alarm_error1 @ alames ativos >= MAX_ALARMS
 
     ldr r3, =SYS_TIME
     ldr r3, [r3]
-    cmp r3, r1
-    blo set_alarm_error2 @ tempo < que SYS_TIME
+    cmp r1, r3
+    blo set_alarm_error2 @ tempo do alarme < SYS_TIME
+
+    ldr r3, [r2]
+    add r3, r3, #1
+    str r3, [r2]
 
     ldr r3, =CALL_ALARM_QUEUE
-    add r3, r3, r2, lsl #3
+set_alarm_place:
+    ldr r2, [r3], #8
+    cmp r2, #0
+    bne set_alarm_place
+
+    sub r3, r3, #8
     str r0, [r3]
     str r1, [r3, #4]
-    eor r1, r1, r1
-    strb r1, [r3, #8]
-
-    ldr r3, =CALL_ALARM_N
-    add r2, r2, #1
-    str r2, [r3]
 
     @ ok, retorna
     mov r0, #0
     mov pc, lr
 
-    @ alames ativos > que MAX_ALARMS
-    set_alarm_error1:
-        mov r0, #-1
-        mov pc, lr
-
-    @ tempo < que SYS_TIME
-    set_alarm_error2:
-        mov r0, #-2
-        mov pc, lr
+set_alarm_error1: @ alarmes ativos >= MAX_ALARMS
+    mov r0, #-1
+    mov pc, lr
+set_alarm_error2: @ tempo < que SYS_TIME
+    mov r0, #-2
+    mov pc, lr
 
 @ up_privilege (codigo: 23)
-@ Parametros: sem parametros
-@ Retorno: sem retorno
+@ Parametros: sem parametros.
+@ Retorno: sem retornol
 up_privilege
     @ quando volta da syscall, o código passa a rodar em modo SYSTEM
     mov SPSR_C, #0x1F
