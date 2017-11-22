@@ -402,8 +402,9 @@ delay:
 @     -2 se o identificador do sonar é inválido.
 @     0 caso contrário
 register_proximity_callback:
-    ldr r2, =CALL_PROX_N
-    ldr r3, [r2]
+    push {r4}
+    ldr r4, =CALL_PROX_N
+    ldr r3, [r4]
     cmp r3, #MAX_CALLBACKS
     bhs register_proximity_callback_error1 @ callbacks >= MAX_CALLBACKS
 
@@ -411,12 +412,12 @@ register_proximity_callback:
     bhi register_proximity_callback_error2 @ sonar inválido
 
     add r3, r3, #1
-    str r3, [r2]
+    str r3, [r4]
 
     ldr r3, =CALL_PROX_QUEUE
 register_proximity_callback_place:
-    ldr r2, [r3], #12
-    cmp r2, #0
+    ldr r4, [r3], #12
+    cmp r4, #0
     bne register_proximity_callback_place
 
     sub r3, r3, #12
@@ -424,6 +425,7 @@ register_proximity_callback_place:
     str r0, [r3, #4]
     str r1, [r3, #8]
 
+    pop {r4}
     mov r0, #0
     mov pc, lr
 
