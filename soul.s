@@ -17,6 +17,7 @@ b NOT_HANDLED
 
 .data
 SYS_TIME:             .skip 4
+USER_TEXT:            .word 0x77812000
 IRQ_HANDLER_DEPTH:    .word 0
 IRQ_STACK:            .skip 4096
 IRQ_STACK_BEGIN:
@@ -41,6 +42,16 @@ CALL_ALARM_N:         .word 0
 @ . proximidade do alarme [4 bytes]
 CALL_PROX_QUEUE:      .zero 96
 CALL_PROX_N:          .word 0
+
+SYSCALL_TABLE:
+.word read_sonar
+.word register_proximity_callback
+.word set_motor_speed
+.word set_motors_speed
+.word get_time
+.word set_time
+.word set_alarm
+.word up_privilege @ permite sair do modo de usuário
 
 @ Constantes para os enderecos do GPT
 .set GPT_BASE,        0x53FA0000
@@ -67,7 +78,6 @@ CALL_PROX_N:          .word 0
 .set TIME_SZ,         200
 
 .set USER_STACK_BEGIN,  0x7F000000
-.set USER_TEXT,         0x77812000
 
 .set MAX_CALLBACKS,   8
 .set MAX_ALARMS,      8
@@ -275,32 +285,23 @@ IRQ_HANDLER_END:
     sub lr, lr, #4
     movs pc, lr
 
-@ Chama as funcoes relacionadas as SYSCALLS
 SWI_HANDLER:
     cmp r7, #16
     bleq read_sonar
-
     cmp r7, #17
     bleq register_proximity_callback
-
     cmp r7, #18
     bleq set_motor_speed
-
     cmp r7, #19
     bleq set_motors_speed
-
     cmp r7, #20
     bleq get_time
-
     cmp r7, #21
     bleq set_time
-
     cmp r7, #22
     bleq set_alarm
-
     cmp r7, #23
     bleq up_privilege
-
     movs pc, lr
 
 NOT_HANDLED:
@@ -401,8 +402,9 @@ delay:
 @     -2 se o identificador do sonar é inválido.
 @     0 caso contrário
 register_proximity_callback:
-    ldr r2, =CALL_PROX_N
-    ldr r3, [r2]
+    push {r4}
+    ldr r4, =CALL_PROX_N
+    ldr r3, [r4]
     cmp r3, #MAX_CALLBACKS
     bhs register_proximity_callback_error1 @ callbacks >= MAX_CALLBACKS
 
@@ -410,12 +412,12 @@ register_proximity_callback:
     bhi register_proximity_callback_error2 @ sonar inválido
 
     add r3, r3, #1
-    str r3, [r2]
+    str r3, [r4]
 
     ldr r3, =CALL_PROX_QUEUE
 register_proximity_callback_place:
-    ldr r2, [r3], #12
-    cmp r2, #0
+    ldr r4, [r3], #12
+    cmp r4, #0
     bne register_proximity_callback_place
 
     sub r3, r3, #12
@@ -423,6 +425,7 @@ register_proximity_callback_place:
     str r0, [r3, #4]
     str r1, [r3, #8]
 
+    pop {r4}
     mov r0, #0
     mov pc, lr
 
