@@ -17,7 +17,6 @@ b NOT_HANDLED
 
 .data
 SYS_TIME:             .skip 4
-USER_TEXT:            .word 0x77812000
 IRQ_HANDLER_DEPTH:    .word 0
 IRQ_STACK:            .skip 4096
 IRQ_STACK_BEGIN:
@@ -78,6 +77,7 @@ SYSCALL_TABLE:
 .set TIME_SZ,         200
 
 .set USER_STACK_BEGIN,  0x7F000000
+.set USER_TEXT,         0x77812000
 
 .set MAX_CALLBACKS,   8
 .set MAX_ALARMS,      8
@@ -160,7 +160,7 @@ SET_TZIC: @ configura TZIC
     str	r0, [r1, #TZIC_INTCTRL]
 
     @ transfere código para o usuário
-    ldr r0, =0x77812000
+    ldr r0, =#USER_TEXT
     msr CPSR_c, #0x10
     mov pc, r0
 
@@ -285,6 +285,7 @@ IRQ_HANDLER_END:
     sub lr, lr, #4
     movs pc, lr
 
+@ Chama as funcoes relacionadas as SYSCALLS
 SWI_HANDLER:
     cmp r7, #16
     bleq read_sonar
