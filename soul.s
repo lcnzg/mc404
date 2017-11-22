@@ -287,11 +287,13 @@ IRQ_HANDLER_END:
     movs pc, lr
 
 SWI_HANDLER:
-    @ calcula offset em r2 e salta para syscall
-    ldr r2, =SYSCALL_TABLE
-    ldr r2, [r2, r7, lsl #2]
-    sub r2, r2, #64
-    blx r2
+    @ calcula offset em r4 e salta para syscall
+    push {r4}
+    ldr r4, =SYSCALL_TABLE
+    ldr r4, [r4, r7, lsl #2]
+    sub r4, r4, #64
+    blx r4
+    pop {r4}
     movs pc, lr
 
 NOT_HANDLED:
