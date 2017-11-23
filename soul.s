@@ -190,10 +190,10 @@ IRQ_HANDLER:
     str r0, [r1]
 
     @ evita tratamentos se a excecao do tipo irq é gerada frequentemente
-    ldr r0, =IRQ_HANDLER_DEPTH
-    ldr r0, [r0]
-    cmp r0, #1
-    bhi IRQ_HANDLER_END
+    @ ldr r0, =IRQ_HANDLER_DEPTH
+    @ ldr r0, [r0]
+    @ cmp r0, #1
+    @ bhi IRQ_HANDLER_END
 
     ldr r2, =CALL_ALARM_QUEUE
     mov r3, #MAX_ALARMS
@@ -211,10 +211,10 @@ IRQ_HANDLER_ALARM_LOOP:
     ldr r1, =SYS_TIME
     ldr r1, [r1]
     cmp r0, r1
-    addlo r2, r2, #8
-    blo IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
+    addhi r2, r2, #8
+    bhi IRQ_HANDLER_ALARM_LOOP @ não passou o tempo
 
-    str r0, [r2] @ ponteiro para callback
+    ldr r0, [r2]
 
     push {r2-r3}
     msr CPSR_c, #0x10
@@ -235,6 +235,11 @@ IRQ_HANDLER_ALARM_LOOP:
     b IRQ_HANDLER_ALARM_LOOP
 
 IRQ_HANDLER_ALARM_END:
+    ldr r0, =IRQ_HANDLER_DEPTH
+    ldr r0, [r0]
+    cmp r0, #1
+    bhi IRQ_HANDLER_END
+
     ldr r2, =CALL_PROX_QUEUE
     mov r3, #MAX_CALLBACKS
     add r1, r2, r3, lsl #3
@@ -246,16 +251,18 @@ IRQ_HANDLER_PROXIMITY_LOOP:
     ldr r0, [r2]
     cmp r0, #0
     addeq r2, r2, #12
-    bhs IRQ_HANDLER_PROXIMITY_LOOP @ sem callback valido
+    beq IRQ_HANDLER_PROXIMITY_LOOP @ sem callback valido
 
     ldr r0, [r2, #4]
+    push {r2-r3}
     bl read_sonar
+    pop {r2-r3}
     ldr r1, [r2, #8]
     cmp r0, r1
     addhs r2, r2, #12
     bhs IRQ_HANDLER_PROXIMITY_LOOP @ distância acima do limiar
 
-    str r0, [r2]
+    ldr r0, [r2]
 
     push {r2-r3}
     msr CPSR_c, #0x10
@@ -388,11 +395,9 @@ read_sonar:
 @ Retorno:
 @ -
 delay:
-    @ multiplicação por 10
-    mov r0, r0, lsl #1
-    add r0, r0, r0, lsl #2
+    mov r0, r0, lsl #6
 
-    @ loop com 2 instrucoes, 2 x 10 instrucoes no loop
+    @ loop com 2 instrucoes, 2 x 64 x r0 instrucoes no loop
     delay_loop:
     subs r0, r0, #1
     bhs delay_loop
@@ -427,19 +432,20 @@ register_proximity_callback_place:
     cmp r4, #0
     bne register_proximity_callback_place
 
-    sub r3, r3, #12
-    str r2, [r3]
-    str r0, [r3, #4]
-    str r1, [r3, #8]
+    str r2, [r3, #-12]
+    str r0, [r3, #-8]
+    str r1, [r3, #-4]
 
     pop {r4}
     mov r0, #0
     mov pc, lr
 
 register_proximity_callback_error1: @ callbacks ativos >= MAX_CALLBACKS
+    pop {r4}
     mov r0, #-1
     mov pc, lr
 register_proximity_callback_error2: @ sonar inválido
+    pop {r4}
     mov r0, #-2
     mov pc, lr
 
@@ -573,9 +579,8 @@ set_alarm_place:
     cmp r2, #0
     bne set_alarm_place
 
-    sub r3, r3, #8
-    str r0, [r3]
-    str r1, [r3, #4]
+    str r0, [r3, #-8]
+    str r1, [r3, #-4]
 
     @ ok, retorna
     mov r0, #0
