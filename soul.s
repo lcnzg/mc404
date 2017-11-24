@@ -171,11 +171,6 @@ IRQ_HANDLER:
     mrs r1, cpsr_all
     push {r0, r1, lr}
 
-    ldr r1, =IRQ_HANDLER_DEPTH
-    ldr r0, [r1]
-    add r0, r0, #1
-    str r0, [r1]
-
     @ permite o tratamento de interrupcões
     msr CPSR_c, #0x12
 
@@ -184,16 +179,11 @@ IRQ_HANDLER:
     mov r0, #1
     str r0, [r1, #GPT_SR]
 
+    @ incrementa o tempo do sistema
     ldr r1, =SYS_TIME
     ldr r0, [r1]
     add r0, r0, #1
     str r0, [r1]
-
-    @ evita tratamentos se a excecao do tipo irq é gerada frequentemente
-    @ ldr r0, =IRQ_HANDLER_DEPTH
-    @ ldr r0, [r0]
-    @ cmp r0, #1
-    @ bhi IRQ_HANDLER_END
 
     ldr r2, =CALL_ALARM_QUEUE
     mov r3, #MAX_ALARMS
@@ -235,10 +225,12 @@ IRQ_HANDLER_ALARM_LOOP:
     b IRQ_HANDLER_ALARM_LOOP
 
 IRQ_HANDLER_ALARM_END:
-    ldr r0, =IRQ_HANDLER_DEPTH
-    ldr r0, [r0]
+    ldr r1, =IRQ_HANDLER_DEPTH
+    ldr r0, [r1]
     cmp r0, #1
-    bhi IRQ_HANDLER_END
+    beq IRQ_HANDLER_END
+    mov r0, #1
+    str r0, [r1]
 
     ldr r2, =CALL_PROX_QUEUE
     mov r3, #MAX_CALLBACKS
@@ -246,7 +238,7 @@ IRQ_HANDLER_ALARM_END:
     add r3, r1, r3, lsl #2
 IRQ_HANDLER_PROXIMITY_LOOP:
     cmp r2, r3
-    beq IRQ_HANDLER_END
+    beq IRQ_HANDLER_PROXIMITY_END
 
     ldr r0, [r2]
     cmp r0, #0
@@ -282,12 +274,12 @@ IRQ_HANDLER_PROXIMITY_LOOP:
     add r2, r2, #12
     b IRQ_HANDLER_PROXIMITY_LOOP
 
-IRQ_HANDLER_END:
+IRQ_HANDLER_PROXIMITY_END:
     ldr r1, =IRQ_HANDLER_DEPTH
-    ldr r0, [r1]
-    sub r0, r0, #1
+    mov r0, #0
     str r0, [r1]
 
+IRQ_HANDLER_END:
     pop {r0, r1, lr}
     msr cpsr_all, r1
     msr spsr_all, r0
