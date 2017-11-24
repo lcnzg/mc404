@@ -7,7 +7,7 @@ interrupt_vector:
 b RESET_HANDLER
 b NOT_HANDLED
 .org 0x08
-b SWI_HANDLER @ interrupcoes de software
+b SVC_HANDLER @ interrupcoes de software
 b NOT_HANDLED
 b NOT_HANDLED
 b NOT_HANDLED
@@ -23,23 +23,23 @@ IRQ_STACK_BEGIN:
 SUPERVISOR_STACK:     .skip 1024
 SUPERVISOR_STACK_BEGIN:
 
-@ funcionamentos das filas:
-@ As filas são zeradas por padrão. Uma posição com o primeiro campo
+@ funcionamentos das vetores:
+@ As vetores são zerados por padrão. Uma posição com o primeiro campo
 @ nao nulo irá armazenar um alarme/callback válido. Os alarmes/callbacks
 @ são sempre desativados depois de executados.
 @
-@ fila de alarmes
+@ vetor de alarmes
 @ estrutura (8 bytes cada):
 @ . apontador de subrotina [4 bytes]
 @ . tempo do alarme [4 bytes]
-CALL_ALARM_QUEUE:     .zero 64
+CALL_ALARM_VECTOR:     .zero 64
 CALL_ALARM_N:         .word 0
-@ fila de callbacks de proximidade
+@ vetor de callbacks de proximidade
 @ estrutura (12 bytes cada):
 @ . apontador de subrotina [4 bytes]
 @ . identificador do sonar [4 bytes]
 @ . proximidade do alarme [4 bytes]
-CALL_PROX_QUEUE:      .zero 96
+CALL_PROX_VECTOR:      .zero 96
 CALL_PROX_N:          .word 0
 
 SYSCALL_TABLE:
@@ -166,13 +166,9 @@ SET_TZIC: @ configura TZIC
 
 IRQ_HANDLER:
     @ salva o contexto
-    push {r0-r8}
+    push {r0-r11, lr}
     mrs r0, spsr_all
-    mrs r1, cpsr_all
-    push {r0, r1, lr}
-
-    @ permite o tratamento de interrupcões
-    msr CPSR_c, #0x12
+    push {r0}
 
     @ desarma a interrupcao do gpt
     ldr r1, =GPT_BASE
@@ -185,7 +181,10 @@ IRQ_HANDLER:
     add r0, r0, #1
     str r0, [r1]
 
-    ldr r2, =CALL_ALARM_QUEUE
+    @ permite o tratamento de interrupções
+    msr CPSR_c, #0x12
+
+    ldr r2, =CALL_ALARM_VECTOR
     mov r3, #MAX_ALARMS
     add r3, r2, r3, lsl #3
 IRQ_HANDLER_ALARM_LOOP:
@@ -209,10 +208,10 @@ IRQ_HANDLER_ALARM_LOOP:
     push {r2-r3}
     msr CPSR_c, #0x10
     blx r0
-    push {r7}
+    push {r7, lr}
     mov r7, #23 @ muda para o modo system
     svc 0x0
-    pop {r7}
+    pop {r7, lr}
     msr CPSR_c, #0x12
     pop {r2-r3}
 
@@ -234,7 +233,7 @@ IRQ_HANDLER_ALARM_END:
     mov r0, #1
     str r0, [r1]
 
-    ldr r2, =CALL_PROX_QUEUE
+    ldr r2, =CALL_PROX_VECTOR
     mov r3, #MAX_CALLBACKS
     add r1, r2, r3, lsl #3
     add r3, r1, r3, lsl #2
@@ -260,11 +259,11 @@ IRQ_HANDLER_PROXIMITY_LOOP:
 
     push {r2-r3}
     msr CPSR_c, #0x10
+    push {r7, lr}
     blx r0
-    push {r7}
     mov r7, #23 @ muda para o modo system
     svc 0x0
-    pop {r7}
+    pop {r7, lr}
     msr CPSR_c, #0x12
     pop {r2-r3}
 
@@ -284,16 +283,15 @@ IRQ_HANDLER_PROXIMITY_END:
     str r0, [r1]
 
 IRQ_HANDLER_END:
-    pop {r0, r1, lr}
-    msr cpsr_all, r1
+    pop {r0}
     msr spsr_all, r0
-    pop {r0-r8}   
+    pop {r0-r11, lr}   
 
     sub lr, lr, #4
     movs pc, lr
 
 @ Chama as funcoes relacionadas as SYSCALLS
-SWI_HANDLER:
+SVC_HANDLER:
     push {lr}
     cmp r7, #16
     bleq read_sonar
@@ -422,7 +420,7 @@ register_proximity_callback:
     add r3, r3, #1
     str r3, [r4]
 
-    ldr r3, =CALL_PROX_QUEUE
+    ldr r3, =CALL_PROX_VECTOR
 register_proximity_callback_place:
     ldr r4, [r3], #12
     cmp r4, #0
@@ -569,7 +567,7 @@ set_alarm:
     add r3, r3, #1
     str r3, [r2]
 
-    ldr r3, =CALL_ALARM_QUEUE
+    ldr r3, =CALL_ALARM_VECTOR
 set_alarm_place:
     ldr r2, [r3], #8
     cmp r2, #0
