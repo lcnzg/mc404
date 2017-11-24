@@ -166,7 +166,7 @@ SET_TZIC: @ configura TZIC
 
 IRQ_HANDLER:
     @ salva o contexto
-    push {r0-r7}
+    push {r0-r8}
     mrs r0, spsr_all
     mrs r1, cpsr_all
     push {r0, r1, lr}
@@ -283,7 +283,7 @@ IRQ_HANDLER_END:
     pop {r0, r1, lr}
     msr cpsr_all, r1
     msr spsr_all, r0
-    pop {r0-r7}    
+    pop {r0-r8}    
 
     sub lr, lr, #4
     movs pc, lr
@@ -387,9 +387,9 @@ read_sonar:
 @ Retorno:
 @ -
 delay:
-    mov r0, r0, lsl #6
+    mov r0, r0, lsl #4
 
-    @ loop com 2 instrucoes, 2 x 64 x r0 instrucoes no loop
+    @ loop com 2 instrucoes, 2 x 16 x r0 instrucoes no loop
     delay_loop:
     subs r0, r0, #1
     bhs delay_loop
