@@ -209,8 +209,10 @@ IRQ_HANDLER_ALARM_LOOP:
     push {r2-r3}
     msr CPSR_c, #0x10
     blx r0
+    push {r7}
     mov r7, #23 @ muda para o modo system
     svc 0x0
+    pop {r7}
     msr CPSR_c, #0x12
     pop {r2-r3}
 
@@ -259,8 +261,10 @@ IRQ_HANDLER_PROXIMITY_LOOP:
     push {r2-r3}
     msr CPSR_c, #0x10
     blx r0
+    push {r7}
     mov r7, #23 @ muda para o modo system
     svc 0x0
+    pop {r7}
     msr CPSR_c, #0x12
     pop {r2-r3}
 
@@ -283,7 +287,7 @@ IRQ_HANDLER_END:
     pop {r0, r1, lr}
     msr cpsr_all, r1
     msr spsr_all, r0
-    pop {r0-r8}    
+    pop {r0-r8}   
 
     sub lr, lr, #4
     movs pc, lr
