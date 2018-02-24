@@ -1,0 +1,59 @@
+# 000
+# LOAD M(3ff): carrega tamanho vetores
+# SUB M(0ff): diminui 1 do tamanho pois jump funciona quando n >= 0
+
+# 001
+# STOR M(3ff): salva tamanho reduzido
+# LOAD M(3fd): carrega posicao vetor 1
+
+# 002
+# STOR M(006,8:19): muda endereco a esquerda de 006
+# ADD M(0ff): soma 1 na posicao do vetor 1
+
+# 003
+# STOR M(3fd): guarda prox posicao vetor 1
+# LOAD M(3fe): carrega posicao vetor 2
+
+# 004
+# STOR M(005,28:39): muda endereco a direita de 005
+# ADD M(0ff): soma 1 na posicao do vetor 2
+
+# 005
+# STOR M(3fe): guarda prox posicao vetor 2
+# LOAD MQ,M(x): carrega em mq o endereco alterado pelo stor em 004 (vetor 2)
+
+# 006
+# MUL M(x): multiplica mq pelo endereco alterado pelo stor em 002 (vetor 1)
+# LOAD MQ: transfere de mq para ac
+
+# 007
+# ADD M(0fe): soma total com multiplicacao realizada
+# STOR M(0fe): guarda a nova soma
+
+# 008
+# LOAD M(3ff): carrega tamanho restante do vetor
+# SUB M(0ff): decrementa 1 do tamanho
+
+# 009
+# JUMP+M(001, 0:19): pula para posicao 001 a esquerda enquanto tamanho >= 0
+# LOAD M(0fe): carrega soma em AC
+
+# 00a
+# JUMP M(400, 0:19): pula para posicao 0x400 inexistente (termina execucao)
+
+000 01 3ff 06 0ff
+001 21 3ff 01 3fd
+002 12 006 05 0ff
+003 21 3fd 01 3fe
+004 13 005 05 0ff
+005 21 3fe 09 000
+006 0b 000 0a 000
+007 05 0fe 21 0fe
+008 01 3ff 06 0ff
+009 0f 001 01 0fe
+00a 0d 400 00 000
+0fe 00 000 00 000 # soma
+0ff 00 000 00 001 # constante 1
+3fd 00 000 00 000 # endereco vetor 1
+3fe 00 000 00 000 # endereco vetor 2
+3ff 00 000 00 000 # tamanho vetores / contador

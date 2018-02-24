@@ -1,0 +1,186 @@
+# v = (gx)^1/2
+
+# 000 LOAD MQ,M(105) # transfere x para MQ
+# MUL M(100) # multiplica MQ (x) pelo g e salva em MQ
+
+# 001 LOAD MQ # transfere o menos significativo da multiplicacao do MQ para o AC
+# STOR M(101) # salva gx (y) em 0x101
+
+# 002 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# repetir 10x
+
+# 003 LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k e salva em mq
+
+# 004 LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 005 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# fim do trecho a ser repetido
+
+# 006 LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 007 LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 008 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 009 LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 00A LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 00B RSH # divide AC por 2
+# 010 STOR M(102) # salva k em 0x102
+
+# 00C LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 00D LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 00E RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 00F LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 010 LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 011 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 012 LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 013 LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 014 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 015 LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 016 LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 017 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 018 LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 019 LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 01A RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 01B LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 01C LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 01D RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 01E LOAD M(101) # carrega o y em AC
+# DIV M(102) # divide ac por k
+
+# 01F LOAD MQ # passa de mq para ac
+# ADD M(102) # soma AC com k
+
+# 020 RSH # divide AC por 2
+# STOR M(102) # salva k em 0x102
+
+# 021 JUMP M(400, 0:19)  # Pula para posicao 0x400 inexistente (termina execucao)
+# ADD M(102) #lixo
+
+
+000 09 105 0B 100 # load mq 106 / mul 100
+
+001 0A 000 21 101 # load mq / stor 101
+
+002 15 000 21 102 # rsh ac / stor 100
+
+003 01 101 0C 102 # load ac 101 / div ac 102
+
+004 0A 000 05 102 # load mq / ad ac 102
+
+005 15 000 21 102 # rsh ac / stor 102
+
+006 01 101 0C 102 # load ac 101 / div 102
+
+007 0A 000 05 102 # load mq / add ac 102
+
+008 15 000 21 102 # rsh ac / stor 102
+
+009 01 101 0C 102 # load ac 101 / div 102
+
+00A 0A 000 05 102 # load mq / add ac 102
+
+00B 15 000 21 102 # rsh ac / stor 102
+
+00C 01 101 0C 102 # load ac 101 / div 102
+
+00D 0A 000 05 102 # load mq / add ac 102
+
+00E 15 000 21 102 # rsh ac / stor 102
+
+00F 01 101 0C 102 # load ac 101 / div 102
+
+010 0A 000 05 102 # load mq / add ac 102
+
+011 15 000 21 102 # rsh ac / stor 102
+
+012 01 101 0C 102 # load ac 101 / div 102
+
+013 0A 000 05 102 # load mq / add ac 102
+
+014 15 000 21 102 # rsh ac / stor 102
+
+015 01 101 0C 102 # load ac 101 / div 102
+
+016 0A 000 05 102 # load mq / add ac 102
+
+017 15 000 21 102 # rsh ac / stor 102
+
+018 01 101 0C 102 # load ac 101 / div 102
+
+019 0A 000 05 102 # load mq / add ac 102
+
+01A 15 000 21 102 # rsh ac / stor 102
+
+01B 01 101 0C 102 # load ac 101 / div 102
+
+01C 0A 000 05 102 # load mq / add ac 102
+
+01D 15 000 21 102 # rsh ac / stor 102
+
+01E 01 101 0C 102 # load ac 101 / div 102
+
+01F 0A 000 05 102 # load mq / add ac 102
+
+020 15 000 21 102 # rsh ac / stor 102
+
+021 0D 400 21 102 # Pula para posicao 0x400 inexistente (termina execucao) / soma AC com k (lixo)
+
+# VARIAVEIS
+
+100 00 00 00 00 0A # g (10)
+
+101 00 00 00 00 00 # y
+
+102 00 00 00 00 00 # k
+
+# 105 00 00 00 00 00 # x
