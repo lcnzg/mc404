@@ -133,7 +133,7 @@ add_alarm:
 @ Retorno:
 @ -
 get_time:
-    push {r4, r7, lr}
+    push {r7, lr}
 
     mov r4, r0 @ guarda parametro
 
@@ -142,7 +142,7 @@ get_time:
 
     str r0, [r4] @ guarda o retorno no endereco do parametro
 
-    pop {r4, r7, pc}
+    pop {r7, pc}
 
 @ set_time
 @ Parametros:
